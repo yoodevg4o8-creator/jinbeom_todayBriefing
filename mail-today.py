@@ -44,8 +44,6 @@ OUT_DIR = os.path.join(HERE, 'out')
 KST = datetime.timezone(datetime.timedelta(hours=9))
 SECRET_SUBJECT = re.compile(r'verification code|one.time|인증\s*(코드|번호)|비밀번호|password reset', re.I)
 DOC_EXT = ('.pdf', '.docx', '.xlsx', '.pptx', '.hwp', '.hwpx', '.txt', '.csv', '.png', '.jpg', '.jpeg')
-# 설정 파일(lawOc)이 비어 있을 때 쓰는 기본 인증값입니다. 설정 파일에 값을 적으면 그 값이 우선합니다.
-DEFAULT_LAW_OC = 'dbwls_0811'
 DEFAULT_LAWS = ['산업안전보건법', '산업안전보건법 시행령', '산업안전보건법 시행규칙', '산업안전보건기준에 관한 규칙']
 MAX_MAILS_SCANNED = 80          # 받은편지함 맨 뒤(최신)에서 이만큼까지만 확인합니다
 MAX_MAIL_BYTES = 25 * 1024 * 1024  # 이보다 큰 메일은 내려받지 않습니다
@@ -219,6 +217,9 @@ def mail_window(settings, now=None):
     now = now or datetime.datetime.now(KST)
     start = parse_point(settings.get('mailFrom') or '오늘 00:00', now, (0, 0))
     end = parse_point(settings.get('mailTo') or '지금', now, (23, 59))
+    # 월요일 아침에 "어제"로 시작하면 주말 동안 쌓인 메일이 빠지므로, 시작을 금요일(같은 시각)로 당깁니다.
+    if now.weekday() == 0 and re.match(r'\s*(어제|yesterday)\b', str(settings.get('mailFrom') or ''), re.I):
+        start -= datetime.timedelta(days=2)
     if start >= end:
         raise SystemExit('mailFrom 이 mailTo 보다 늦습니다. 구간을 확인해 주세요.')
     return start, end
@@ -386,7 +387,7 @@ def get_law(settings, state, offline_rows=None):
     if settings.get('lawWatch') is False:
         return None
     laws = [x for x in as_list(settings.get('laws') or DEFAULT_LAWS) if isinstance(x, str) and x.strip()][:10]
-    oc = str(settings.get('lawOc') or DEFAULT_LAW_OC or '').strip()
+    oc = str(settings.get('lawOc') or '').strip()
     if not oc:
         return {'error': '법령 개정 확인을 쓰려면 국가법령정보 공동활용(open.law.go.kr)에서 인증값(OC)을 발급받아 settings.local.json 의 lawOc 에 적어 주세요. 쓰지 않으려면 lawWatch 를 false 로 바꾸세요.'}
     if not re.fullmatch(r'[A-Za-z0-9_.@+\-]{1,200}', oc):
